@@ -1,25 +1,18 @@
-import json
+import sys
 import os
-import re
-from datetime import datetime
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
+# Adiciona o diretório pai ao path para importar arquivos compartilhados
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from shared.database import carregar_todos_os_dados, salvar_no_arquivo
+from shared.utils import extrair_nome_e_data, validar_data
+
 # --- CONFIGURAÇÕES ---
 TOKEN = '8372581903:AAFZgxbKBjcmdeSvxGCaw5Jw8qcUUaX2Zl4'
-ARQUIVO_DADOS = 'aniversarios.json'
+ARQUIVO_DADOS = '../aniversarios.json'
 ADMIN_ID = 6055192479  # Você vai mudar isso depois de descobrir seu ID
-
-# --- FUNÇÕES DE ARQUIVO ---
-def carregar_todos_os_dados():
-    if os.path.exists(ARQUIVO_DADOS):
-        with open(ARQUIVO_DADOS, 'r') as f:
-            return json.load(f)
-    return {}
-
-def salvar_no_arquivo(dados_completos):
-    with open(ARQUIVO_DADOS, 'w') as f:
-        json.dump(dados_completos, f, indent=4)
 
 # --- COMANDOS DO BOT ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -39,28 +32,24 @@ async def salvar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_chat.id)
     frase_completa = " ".join(context.args)
     
-    padrao_data = r"(\d{1,2}/\d{1,2})"
-    resultado = re.search(padrao_data, frase_completa)
+    nome, data = extrair_nome_e_data(frase_completa)
     
-    if not resultado:
+    if not data:
         await update.message.reply_text("❌ Use o formato: /salvar Nome Sobrenome 15/05")
         return
     
-    data = resultado.group(1)
-    nome = frase_completa.replace(data, "").strip()
-    
-    todos_os_dados = carregar_todos_os_dados()
+    todos_os_dados = carregar_todos_os_dados(ARQUIVO_DADOS)
     if user_id not in todos_os_dados:
         todos_os_dados[user_id] = {}
     
     todos_os_dados[user_id][nome] = data
-    salvar_no_arquivo(todos_os_dados)
+    salvar_no_arquivo(todos_os_dados, ARQUIVO_DADOS)
     
     await update.message.reply_text(f"✅ Salvei {nome} para o dia {data}!")
 
 async def listar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_chat.id)
-    todos_os_dados = carregar_todos_os_dados()
+    todos_os_dados = carregar_todos_os_dados(ARQUIVO_DADOS)
     minha_lista = todos_os_dados.get(user_id, {})
     
     if not minha_lista:
@@ -75,7 +64,7 @@ async def admin_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⛔ Acesso restrito ao administrador.")
         return
     
-    dados = carregar_todos_os_dados()
+    dados = carregar_todos_os_dados(ARQUIVO_DADOS)
     resumo = f"📊 *Relatório Admin*\n\nUsuários: {len(dados)}\nAniversários: {sum(len(v) for v in dados.values())}"
     await update.message.reply_text(resumo, parse_mode='Markdown')
 
